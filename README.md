@@ -17,6 +17,7 @@ Vibe coding is a development paradigm where you:
 - 🏗️ **Project Structure** - Organized for effective AI collaboration
 - 🔧 **Development Tools** - Configured for optimal AI-assisted workflow
 - 📚 **Documentation** - Comprehensive guides for vibe coding practices
+- 🤖 **dotai Integration** - Structured AI configuration and development rules
 
 ## Quick Start
 
@@ -40,42 +41,99 @@ uv pip install -r requirements.txt
 - Enable AI features
 
 4. **Start Vibe Coding**
-- Check `.ai/templates` for prompt templates
-- Use `.ai/contexts` for project context
+- Check `.ai/lib/prompts.md` for ready-to-use prompts
+- Use `.ai/codex/codex.md` for project patterns
 - Follow the development workflow in docs
+
+## Using the .ai Directory
+
+The `.ai` directory is your command center for AI-assisted development:
+
+### 1. Codex (`/.ai/codex/`)
+```markdown
+# Example: Using Codex for New Features
+1. Check codex.md for existing patterns
+2. Follow architectural guidelines
+3. Update with new patterns you discover
+```
+
+### 2. Rules (`/.ai/rules/`)
+```markdown
+# Example: Python Development Rules
+- Use type hints for all functions
+- Write PEP 257 docstrings
+- Follow project-specific conventions
+```
+
+### 3. Library (`/.ai/lib/`)
+```markdown
+# Example: Common Prompts
+"Create a FastAPI endpoint that handles user authentication with JWT tokens"
+"Generate a data model with validation for user profiles"
+```
+
+### 4. Plugins (`/.ai/plugins/`)
+```json
+{
+  "cursor": {
+    "aiCommands": {
+      "test": "Generate pytest test for current file",
+      "doc": "Add docstrings to current file"
+    }
+  }
+}
+```
+
+### 5. Session & Status
+- Track AI interactions in `session/`
+- Monitor progress in `status/`
+- Review and improve effectiveness
+
+### 6. Blueprints
+- Check `blueprints/` for full project templates
+- Use for common application patterns
+- Contribute your own blueprints
 
 ## Project Structure
 
 ```
 my-project/
 ├── .ai/                # AI configuration and templates
-│   ├── prompts/       # Reusable AI prompts
-│   ├── contexts/      # Project context files
-│   └── templates/     # Code generation templates
+│   ├── codex/         # Project-wide AI context
+│   ├── rules/         # Development rules and standards
+│   ├── lib/           # Reusable prompts and patterns
+│   ├── plugins/       # IDE and tool configurations
+│   ├── session/       # AI session management
+│   ├── status/        # AI task tracking
+│   └── blueprints/    # Larger templates
 ├── src/               # Source code
 │   ├── models/        # Data models
 │   ├── programs/      # Synalinks programs
 │   └── utils/         # Utilities
 ├── tests/             # Test files
+├── docs/              # Documentation
+│   ├── sop/          # Standard Operating Procedures
+│   ├── api/          # API Documentation
+│   └── examples/      # Usage examples
 └── app/               # Application code
 ```
 
 ## Development Workflow
 
 1. **Describe Features**
-   - Use natural language to describe what you want to build
-   - Reference similar examples from `.ai/templates`
-   - Provide context and constraints
+   - Write clear natural language descriptions
+   - Reference `.ai/lib/prompts.md` for examples
+   - Follow patterns in `.ai/codex/codex.md`
 
 2. **Generate & Refine**
    - Let AI generate initial implementation
-   - Review and refine the code
-   - Iterate based on feedback
+   - Follow rules in `.ai/rules/python-dev.md`
+   - Use IDE features from `.ai/plugins/cursor.md`
 
 3. **Test & Document**
-   - Describe test cases in natural language
-   - Let AI generate tests
-   - Document key decisions
+   - Write tests following project standards
+   - Document using templates from `.ai/lib/prompts.md`
+   - Keep documentation up to date
 
 ## Documentation
 
@@ -97,3 +155,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Synalinks Documentation](https://docs.synalinks.dev)
 - [Cursor IDE](https://cursor.sh)
 - [Community Forum](https://community.synalinks.dev)
+- [Discord Community](https://discord.gg/synalinks)
