@@ -76,7 +76,7 @@ class QuestionAnswerer(Program):
         
         self.language_model = language_model
     
-    async def __call__(self, question: Question) -> Answer:
+    async def call(self, inputs, training=False):
         """
         Process a question and generate an answer.
         
@@ -282,7 +282,7 @@ class EnhancedQuestionAnswerer(Program):
         # Use provided retriever or create a simple one
         self.retriever = retriever if retriever is not None else SimpleRetriever()
     
-    async def __call__(self, question: Question) -> Answer:
+    async def call(self, inputs, training=False):
         """
         Process a question and generate an answer using retrieval.
         
