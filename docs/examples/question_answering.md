@@ -56,7 +56,7 @@ Next, let's create a simple version of our question answering program:
 ```python
 # program.py
 import synalinks
-from synalinks import Program
+from synalinks import Program, Generator
 from models import Question, Answer
 
 class QuestionAnswerer(Program):
@@ -76,111 +76,44 @@ class QuestionAnswerer(Program):
         
         self.language_model = language_model
     
-    async def call(self, inputs, training=False):
+    async def call(self, inputs, training: bool = False):
         """
         Process a question and generate an answer.
         
         Args:
-            question: The question to answer
+            inputs: The question to answer (Question model)
+            training: Whether the program is in training mode
             
         Returns:
             An answer with explanation, confidence, and citations
         """
-        # Construct a prompt for the language model
-        prompt = self._build_prompt(question)
+        question = inputs
         
-        # Get response from language model
-        response = await self.language_model.generate(prompt)
+        # Use Generator to directly create a structured Answer from the question
+        from synalinks import Generator
         
-        # Parse the response into our Answer model
-        parsed_answer = self._parse_response(response)
+        # Create a generator that will output our Answer model
+        answer_generator = Generator(
+            data_model=Answer,
+            language_model=self.language_model,
+            system_message="You are an expert assistant that provides detailed answers with citations."
+        )
         
-        return parsed_answer
-    
-    def _build_prompt(self, question: Question) -> str:
-        """Build a prompt for the language model based on the question."""
+        # Build context for the generator
         domain_context = f" in the domain of {question.domain}" if question.domain else ""
-        
-        prompt = f"""
+        user_message = f"""
         Answer the following question{domain_context} with a detailed explanation and citations.
         
         Question: {question.question}
         
-        Provide your answer in the following format:
-        
-        Answer: <concise direct answer>
-        
-        Explanation: <detailed explanation supporting the answer>
-        
-        Confidence: <a number between 0 and 1 indicating your confidence>
-        
-        Citations:
-        1. <citation 1>
-        2. <citation 2>
-        ...
+        Provide a concise direct answer, a detailed explanation supporting your answer, 
+        a confidence score between 0 and 1, and relevant citations.
         """
         
-        return prompt
-    
-    def _parse_response(self, response: str) -> Answer:
-        """Parse the language model response into an Answer object."""
-        # Simple parsing logic - in a real application, this would be more robust
-        lines = response.strip().split("\n")
+        # Generate the Answer directly using the structured output capabilities
+        answer = await answer_generator(user_message)
         
-        answer_text = ""
-        explanation_text = ""
-        confidence_value = 0.7  # Default
-        citations_list = []
-        
-        current_section = None
-        citation_buffer = []
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            if line.startswith("Answer:"):
-                current_section = "answer"
-                answer_text = line.replace("Answer:", "").strip()
-            elif line.startswith("Explanation:"):
-                current_section = "explanation"
-                explanation_text = line.replace("Explanation:", "").strip()
-            elif line.startswith("Confidence:"):
-                try:
-                    confidence_value = float(line.replace("Confidence:", "").strip())
-                except ValueError:
-                    confidence_value = 0.7
-            elif line.startswith("Citations:"):
-                current_section = "citations"
-            elif current_section == "explanation" and not line.startswith("Confidence:") and not line.startswith("Citations:"):
-                explanation_text += " " + line
-            elif current_section == "citations" and line[0].isdigit() and line[1] in [".", ")", ":"]:
-                if citation_buffer:
-                    citations_list.append({"text": " ".join(citation_buffer)})
-                    citation_buffer = []
-                citation_buffer.append(line[2:].strip())
-            elif current_section == "citations":
-                citation_buffer.append(line)
-        
-        # Add the last citation if any
-        if citation_buffer:
-            citations_list.append({"text": " ".join(citation_buffer)})
-        
-        # Ensure we have at least something in each field
-        if not answer_text:
-            answer_text = "Unable to determine a clear answer."
-        
-        if not explanation_text:
-            explanation_text = "No explanation provided."
-        
-        # Create and return the Answer object
-        return Answer(
-            answer=answer_text,
-            explanation=explanation_text,
-            confidence=confidence_value,
-            citations=citations_list
-        )
+        return answer
 ```
 
 ## Step 3: Add Retrieval Capabilities
@@ -260,7 +193,7 @@ Now let's update our program to use the retriever:
 from retrieval import SimpleRetriever
 from models import Question, Answer
 import synalinks
-from synalinks import Program
+from synalinks import Program, Generator
 
 class EnhancedQuestionAnswerer(Program):
     """An enhanced question answerer that uses retrieval for better answers."""
@@ -282,43 +215,44 @@ class EnhancedQuestionAnswerer(Program):
         # Use provided retriever or create a simple one
         self.retriever = retriever if retriever is not None else SimpleRetriever()
     
-    async def call(self, inputs, training=False):
+    async def call(self, inputs, training: bool = False):
         """
         Process a question and generate an answer using retrieval.
         
         Args:
-            question: The question to answer
+            inputs: The question to answer (Question model)
+            training: Whether the program is in training mode
             
         Returns:
             An answer with explanation, confidence, and citations
         """
+        question = inputs
+        
         # Retrieve relevant information
         retrieved_docs = await self.retriever.search(
             query=question.question,
             domain=question.domain
         )
         
-        # Construct a prompt that includes the retrieved information
-        prompt = self._build_prompt(question, retrieved_docs)
+        # Use Generator for structured output
+        from synalinks import Generator
         
-        # Get response from language model
-        response = await self.language_model.generate(prompt)
+        # Create a generator that will output our Answer model
+        answer_generator = Generator(
+            data_model=Answer,
+            language_model=self.language_model,
+            system_message="You are an expert assistant that provides detailed answers with citations based on provided information."
+        )
         
-        # Parse the response into our Answer model
-        parsed_answer = self._parse_response(response, retrieved_docs)
-        
-        return parsed_answer
-    
-    def _build_prompt(self, question: Question, retrieved_docs: List[Dict[str, Any]]) -> str:
-        """Build a prompt that includes retrieved information."""
+        # Build context that includes the retrieved information
         domain_context = f" in the domain of {question.domain}" if question.domain else ""
         
-        # Build context from retrieved documents
+        # Format retrieved documents as context
         context = ""
         for i, doc in enumerate(retrieved_docs, 1):
             context += f"\nDocument {i}:\nTitle: {doc['title']}\nContent: {doc['content']}\nSource: {doc['source']}\n"
         
-        prompt = f"""
+        user_message = f"""
         You are answering the following question{domain_context}:
         
         Question: {question.question}
@@ -327,101 +261,34 @@ class EnhancedQuestionAnswerer(Program):
         {context}
         
         Based on the information provided and your knowledge, please answer the question.
+        Provide a concise direct answer, a detailed explanation supporting your answer, 
+        a confidence score between 0 and 1 (based on the quality and relevance of the information), 
+        and relevant citations from the provided documents.
         
-        Provide your answer in the following format:
-        
-        Answer: <concise direct answer>
-        
-        Explanation: <detailed explanation supporting the answer>
-        
-        Confidence: <a number between 0 and 1 indicating your confidence, based on the quality and relevance of the retrieved information>
-        
-        Citations:
-        1. <citation 1 - include the source and title from the retrieved documents>
-        2. <citation 2>
-        ...
-        
-        Note: Only cite the provided documents if they are relevant. If they are not relevant, you may rely on your own knowledge but assign a lower confidence score.
+        Only cite the provided documents if they are relevant. If they are not relevant, 
+        you may rely on your own knowledge but assign a lower confidence score.
         """
         
-        return prompt
-    
-    def _parse_response(self, response: str, retrieved_docs: List[Dict[str, Any]]) -> Answer:
-        """Parse the language model response into an Answer object, enhancing citations with URLs."""
-        # Similar to the previous parsing logic, but enhanced to include URLs from retrieved docs
-        lines = response.strip().split("\n")
+        # Generate a structured Answer directly
+        answer = await answer_generator(user_message)
         
-        answer_text = ""
-        explanation_text = ""
-        confidence_value = 0.7  # Default
-        citations_list = []
-        
-        current_section = None
-        citation_buffer = []
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            if line.startswith("Answer:"):
-                current_section = "answer"
-                answer_text = line.replace("Answer:", "").strip()
-            elif line.startswith("Explanation:"):
-                current_section = "explanation"
-                explanation_text = line.replace("Explanation:", "").strip()
-            elif line.startswith("Confidence:"):
-                try:
-                    confidence_value = float(line.replace("Confidence:", "").strip())
-                except ValueError:
-                    confidence_value = 0.7
-            elif line.startswith("Citations:"):
-                current_section = "citations"
-            elif current_section == "explanation" and not line.startswith("Confidence:") and not line.startswith("Citations:"):
-                explanation_text += " " + line
-            elif current_section == "citations" and line[0].isdigit() and line[1] in [".", ")", ":"]:
-                if citation_buffer:
-                    # Create a citation with text
-                    citation = {"text": " ".join(citation_buffer)}
-                    
-                    # Try to match with retrieved docs to add URL
-                    for doc in retrieved_docs:
-                        if doc["source"] in " ".join(citation_buffer) or doc["title"] in " ".join(citation_buffer):
-                            citation["url"] = doc["url"]
-                            break
-                    
-                    citations_list.append(citation)
-                    citation_buffer = []
-                citation_buffer.append(line[2:].strip())
-            elif current_section == "citations":
-                citation_buffer.append(line)
-        
-        # Add the last citation if any
-        if citation_buffer:
-            citation = {"text": " ".join(citation_buffer)}
+        # Enhance citations with URLs from retrieved docs where possible
+        enhanced_citations = []
+        for citation in answer.citations:
+            enhanced_citation = {"text": citation["text"]}
             
             # Try to match with retrieved docs to add URL
             for doc in retrieved_docs:
-                if doc["source"] in " ".join(citation_buffer) or doc["title"] in " ".join(citation_buffer):
-                    citation["url"] = doc["url"]
+                if doc["source"] in citation["text"] or doc["title"] in citation["text"]:
+                    enhanced_citation["url"] = doc["url"]
                     break
-            
-            citations_list.append(citation)
+                    
+            enhanced_citations.append(enhanced_citation)
         
-        # Ensure we have at least something in each field
-        if not answer_text:
-            answer_text = "Unable to determine a clear answer."
+        # Update the citations in the answer
+        answer.citations = enhanced_citations
         
-        if not explanation_text:
-            explanation_text = "No explanation provided."
-        
-        # Create and return the Answer object
-        return Answer(
-            answer=answer_text,
-            explanation=explanation_text,
-            confidence=confidence_value,
-            citations=citations_list
-        )
+        return answer
 ```
 
 ## Step 5: Create a Main Script
@@ -451,7 +318,7 @@ async def main():
         print(f"\nProcessing question {i}: {question.question}")
         
         # Generate answer
-        answer = await qa_system(question)
+        answer = await qa_system.call(question)
         
         # Print the results
         print("\n" + "="*50)
@@ -506,15 +373,14 @@ class MockLanguageModel:
     async def generate(self, prompt):
         """Return a fixed response for testing."""
         return """
-        Answer: This is a test answer.
+        This is a test answer.
         
-        Explanation: This is a detailed explanation for testing purposes.
+        This is a detailed explanation for testing purposes.
         
-        Confidence: 0.85
+        0.85
         
-        Citations:
-        1. Test Citation 1, Source: Test Journal, 2023
-        2. Test Citation 2, Source: Another Journal, 2022
+        Test Citation 1, Source: Test Journal, 2023
+        Test Citation 2, Source: Another Journal, 2022
         """
 
 class MockRetriever:
@@ -547,26 +413,62 @@ def qa_system():
 @pytest.mark.asyncio
 async def test_qa_basic_functionality(qa_system):
     """Test that the QA system returns an answer for a basic question."""
-    question = Question(question="What is a test?")
-    
-    answer = await qa_system(question)
-    
-    assert isinstance(answer, Answer)
-    assert answer.answer == "This is a test answer."
-    assert answer.explanation == "This is a detailed explanation for testing purposes."
-    assert answer.confidence == 0.85
-    assert len(answer.citations) == 2
+    # Create a patch for the Generator class
+    with patch('synalinks.Generator') as MockGenerator:
+        # Configure the mock Generator instance
+        mock_generator_instance = AsyncMock()
+        MockGenerator.return_value = mock_generator_instance
+        
+        # Configure the return value for the generator
+        mock_answer = Answer(
+            answer="This is a test answer.",
+            explanation="This is a detailed explanation for testing purposes.",
+            confidence=0.85,
+            citations=[
+                {"text": "Test Citation 1, Source: Test Journal, 2023"}, 
+                {"text": "Test Citation 2, Source: Another Journal, 2022"}
+            ]
+        )
+        mock_generator_instance.return_value = mock_answer
+        
+        # Execute the test
+        question = Question(question="What is a test?")
+        answer = await qa_system.call(question)
+        
+        # Verify the answer
+        assert isinstance(answer, Answer)
+        assert answer.answer == "This is a test answer."
+        assert answer.explanation == "This is a detailed explanation for testing purposes."
+        assert answer.confidence == 0.85
+        assert len(answer.citations) == 2
 
 @pytest.mark.asyncio
 async def test_qa_with_domain(qa_system):
     """Test that the QA system handles domain-specific questions."""
-    question = Question(question="What is a test?", domain="testing")
-    
-    answer = await qa_system(question)
-    
-    assert isinstance(answer, Answer)
-    assert answer.answer == "This is a test answer."
-    # Other assertions...
+    # Create a patch for the Generator class
+    with patch('synalinks.Generator') as MockGenerator:
+        # Configure the mock Generator instance
+        mock_generator_instance = AsyncMock()
+        MockGenerator.return_value = mock_generator_instance
+        
+        # Configure the return value for the generator
+        mock_answer = Answer(
+            answer="Domain-specific test answer.",
+            explanation="Domain-specific explanation for testing.",
+            confidence=0.9,
+            citations=[{"text": "Domain Test Citation, Source: Test Journal, 2023"}]
+        )
+        mock_generator_instance.return_value = mock_answer
+        
+        # Execute the test
+        question = Question(question="What is a test?", domain="testing")
+        answer = await qa_system.call(question)
+        
+        # Verify the answer
+        assert isinstance(answer, Answer)
+        assert answer.answer == "Domain-specific test answer."
+        assert answer.confidence == 0.9
+        assert len(answer.citations) == 1
 
 @pytest.mark.asyncio
 async def test_retrieval_integration():
@@ -582,32 +484,47 @@ async def test_retrieval_integration():
         }
     ]
     
-    mock_language_model = AsyncMock()
-    mock_language_model.generate.return_value = "Answer: Test\n\nExplanation: Test\n\nConfidence: 0.8\n\nCitations:\n1. Test Citation"
-    
-    # Create QA system with mocks
-    qa_system = EnhancedQuestionAnswerer(
-        language_model=mock_language_model,
-        retriever=mock_retriever
-    )
-    
-    # Run with a test question
-    question = Question(question="Test question", domain="test")
-    answer = await qa_system(question)
-    
-    # Verify the retriever was called with the right arguments
-    mock_retriever.search.assert_called_once_with(
-        query="Test question", 
-        domain="test"
-    )
-    
-    # Verify the language model was called (we don't check the exact prompt)
-    assert mock_language_model.generate.called
-    
-    # Verify we got a valid answer
-    assert isinstance(answer, Answer)
-    assert answer.answer == "Test"
-    assert answer.confidence == 0.8
+    # Create a patch for Generator
+    with patch('synalinks.Generator') as MockGenerator:
+        # Configure the Generator mock
+        mock_generator_instance = AsyncMock()
+        MockGenerator.return_value = mock_generator_instance
+        
+        # Set up the return value for the generator
+        mock_answer = Answer(
+            answer="Test",
+            explanation="Test explanation",
+            confidence=0.8,
+            citations=[{"text": "Test Citation, Source: Test Source"}]
+        )
+        mock_generator_instance.return_value = mock_answer
+        
+        # Create a mock language model
+        mock_language_model = AsyncMock()
+        
+        # Create QA system with mocks
+        qa_system = EnhancedQuestionAnswerer(
+            language_model=mock_language_model,
+            retriever=mock_retriever
+        )
+        
+        # Run with a test question
+        question = Question(question="Test question", domain="test")
+        answer = await qa_system.call(question)
+        
+        # Verify the retriever was called with the right arguments
+        mock_retriever.search.assert_called_once_with(
+            query="Test question", 
+            domain="test"
+        )
+        
+        # Verify the generator was called
+        assert MockGenerator.called
+        
+        # Verify we got a valid answer
+        assert isinstance(answer, Answer)
+        assert answer.answer == "Test"
+        assert answer.confidence == 0.8
 ```
 
 ## Step 7: Add a Web API (Optional)
@@ -662,7 +579,7 @@ async def answer_question(request: QuestionRequest):
         )
         
         # Process the question
-        result = await qa_system(question)
+        result = await qa_system.call(question)
         
         # Convert to response model
         response = AnswerResponse(
@@ -738,16 +655,24 @@ This example demonstrates how to build a comprehensive question answering system
 
 - Structured data models for questions and answers
 - A retrieval component to find relevant information
-- A robust program for processing questions and generating answers
+- Proper use of Synalinks' Generator for structured output handling
 - Tests to verify functionality
 - An optional web API for serving the system
+
+Key best practices demonstrated:
+
+1. Using DataModel classes to define structured inputs and outputs
+2. Leveraging Synalinks' Generator for automatic structured output handling
+3. Using the correct Program interface with the `call()` method
+4. Integrating external components like retrievers
+5. Proper testing with mocks
 
 You can extend this example by:
 
 - Implementing a real retrieval system (e.g., using vector databases)
-- Adding more sophisticated parsing logic
+- Adding evaluation metrics for your question answering system
 - Implementing advanced caching for better performance
 - Adding more validation and error handling
 - Expanding the API with additional endpoints
 
-For more examples, check out the other guides in this documentation. 
+For more examples, check out the other guides in this documentation.
